@@ -1,0 +1,144 @@
+Generating, compiling, and loading C code.
+Using default integration parameters.
+
+--- Mackey-Glass Full Time Series (first 10 points) ---
+tensor([[0.4920],
+        [0.4870],
+        [0.5063],
+        [0.5501],
+        [0.6125],
+        [0.6839],
+        [0.7551],
+        [0.8203],
+        [0.8767],
+        [0.9233]], dtype=torch.float64)
+
+--- A few batches from the train_loader (first 10) ---
+Batch 0:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.4920],
+         [0.4870],
+         [0.5063]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.5501]], dtype=torch.float64)
+Batch 1:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.4870],
+         [0.5063],
+         [0.5501]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.6125]], dtype=torch.float64)
+Batch 2:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.5063],
+         [0.5501],
+         [0.6125]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.6839]], dtype=torch.float64)
+Batch 3:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.5501],
+         [0.6125],
+         [0.6839]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.7551]], dtype=torch.float64)
+Batch 4:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.6125],
+         [0.6839],
+         [0.7551]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.8203]], dtype=torch.float64)
+Batch 5:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.6839],
+         [0.7551],
+         [0.8203]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.8767]], dtype=torch.float64)
+Batch 6:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.7551],
+         [0.8203],
+         [0.8767]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.9233]], dtype=torch.float64)
+Batch 7:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.8203],
+         [0.8767],
+         [0.9233]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.9604]], dtype=torch.float64)
+Batch 8:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.8767],
+         [0.9233],
+         [0.9604]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[0.9889]], dtype=torch.float64)
+Batch 9:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[0.9233],
+         [0.9604],
+         [0.9889]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[1.0097]], dtype=torch.float64)
+
+--- A few batches from the test_loader (first 5) ---
+Test Batch 0:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[1.1504],
+         [1.1294],
+         [1.1061]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[1.0828]], dtype=torch.float64)
+Test Batch 1:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[1.1294],
+         [1.1061],
+         [1.0828]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[1.0610]], dtype=torch.float64)
+Test Batch 2:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[1.1061],
+         [1.0828],
+         [1.0610]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[1.0420]], dtype=torch.float64)
+Test Batch 3:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[1.0828],
+         [1.0610],
+         [1.0420]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[1.0266]], dtype=torch.float64)
+Test Batch 4:
+  X_batch shape: torch.Size([1, 3, 1]), X_batch =
+tensor([[[1.0610],
+         [1.0420],
+         [1.0266]]], dtype=torch.float64)
+  Y_batch shape: torch.Size([1, 1]), Y_batch =
+tensor([[1.0146]], dtype=torch.float64)
+Epoch [5/50], Loss: 0.025785
+Epoch [10/50], Loss: 0.012071
+Epoch [15/50], Loss: 0.003163
+Epoch [20/50], Loss: 0.002355
+Epoch [25/50], Loss: 0.002468
+Epoch [30/50], Loss: 0.002517
+Epoch [35/50], Loss: 0.002549
+Epoch [40/50], Loss: 0.002565
+Epoch [45/50], Loss: 0.002568
+Epoch [50/50], Loss: 0.002558
+Test MSE Loss: 0.006466
+
+Sample Predictions vs Targets (Test Set)
+Pred: 1.1574, Target: 1.0828
+Pred: 1.1413, Target: 1.0610
+Pred: 1.1244, Target: 1.0420
+Pred: 1.1081, Target: 1.0266
+Pred: 1.0933, Target: 1.0146
+
+Forecasting 5 steps ahead from the last train window:
+[1.1709678173065186, 1.1585421562194824, 1.1702666282653809, 1.1763306856155396, 1.178051471710205]
