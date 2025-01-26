@@ -1,11 +1,15 @@
 import numpy as np
 import torch
 import math
+import matplotlib.pyplot as plt
 from jitcdde import jitcdde_lyap, y, t
 from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split
 import torch.nn as nn
 import torch.optim as optim
+import warnings
+
+# Suppress potential warnings for cleaner output
+warnings.filterwarnings("ignore")
 
 ############################################
 # 1) Mackey-Glass Dataset Class
@@ -19,9 +23,9 @@ class MackeyGlass(Dataset):
                  beta=0.2,
                  gamma=0.1,
                  dt=1.0,
-                 splits=(30., 10.),
+                 splits=(1000., 200.),  # 1000 train, 200 test
                  start_offset=0.,
-                 seed_id=0
+                 seed_id=42
     ):
         super().__init__()
         self.tau = tau
@@ -36,8 +40,8 @@ class MackeyGlass(Dataset):
         self.seed_id = seed_id
         self.maxtime = self.traintime + self.testtime + self.dt
 
-        self.traintime_pts = round(self.traintime/self.dt)
-        self.testtime_pts  = round(self.testtime/self.dt)
+        self.traintime_pts = round(self.traintime / self.dt)
+        self.testtime_pts  = round(self.testtime / self.dt)
         self.maxtime_pts   = self.traintime_pts + self.testtime_pts + 1
 
         self.mackeyglass_specification = [
@@ -48,7 +52,6 @@ class MackeyGlass(Dataset):
 
     def generate_data(self):
         np.random.seed(self.seed_id)
-        from jitcdde import jitcdde_lyap
         self.DDE = jitcdde_lyap(self.mackeyglass_specification)
         self.DDE.constant_past([self.constant_past])
         self.DDE.step_on_discontinuities()
@@ -72,8 +75,8 @@ class MackeyGlass(Dataset):
         self.lyap_exp  = (lyaps.t() @ lyaps_weights / lyaps_weights.sum()).item()
 
     def split_data(self):
-        self.ind_train = torch.arange(0, self.traintime_pts)
-        self.ind_test  = torch.arange(self.traintime_pts, self.maxtime_pts-1)
+        self.ind_train = torch.arange(0, self.traintime_pts).numpy()
+        self.ind_test  = torch.arange(self.traintime_pts, self.maxtime_pts-1).numpy()
 
     def __len__(self):
         return len(self.mackeyglass_soln) - 1
@@ -83,232 +86,333 @@ class MackeyGlass(Dataset):
         target = self.mackeyglass_soln[idx, :]                          # (1,)
         return sample, target
 
-
 #############################################
 # 2) Create Time Series Dataset
 #############################################
 def create_time_series_dataset(
     data,
+    train_indices,
+    test_indices,
     lookback_window,
     forecasting_horizon,
     num_bins,
-    test_size,
-    offset=0,
     MSE=False
 ):
-    x = np.array([point[0] for point in data])  # shape: (N, (1,1))
-    y = np.array([point[1] for point in data])  # shape: (N, (1,))
+    """
+    Create training and testing datasets based on predefined indices.
 
-    x_processed = []
-    y_processed = []
+    Parameters:
+    - data: List of (sample, target) tuples.
+    - train_indices: List or numpy array of training indices.
+    - test_indices: List or numpy array of testing indices.
+    - lookback_window: Number of past points to use.
+    - forecasting_horizon: Number of steps ahead to predict.
+    - num_bins: Number of bins for classification (ignored if MSE=True).
+    - MSE: If True, perform regression; else, classification.
 
-    # Build sequences
-    for i in range(len(x) - lookback_window - forecasting_horizon + 1):
-        x_window = x[i : i + lookback_window]
-        y_value  = y[i + lookback_window + forecasting_horizon - 1]
-        x_processed.append(x_window)
-        y_processed.append(y_value)
+    Returns:
+    - train_loader: DataLoader for training data.
+    - test_loader: DataLoader for testing data.
+    """
+    # Extract scalar values from data_list
+    x = np.array([point[0] for point in data])  # shape: (N,)
+    y = np.array([point[1] for point in data])  # shape: (N,)
 
-    # Train-test split
-    X_train, X_test, y_train, y_test = train_test_split(
-        x_processed, y_processed, test_size=test_size, shuffle=False
-    )
+    x_processed_train = []
+    y_processed_train = []
+
+    x_processed_test = []
+    y_processed_test = []
+
+    # Function to check if a sequence is entirely within the desired indices
+    def is_valid_sequence(start_idx, end_idx, valid_indices):
+        return all(idx in valid_indices for idx in range(start_idx, end_idx))
+
+    # Build sequences for training
+    for i in train_indices:
+        # Calculate the required range for the sequence
+        start = i - lookback_window - forecasting_horizon + 1
+        end = i
+        if start < 0:
+            continue  # Skip if the window goes beyond the data start
+        # Ensure the target index does not exceed y's bounds
+        target_idx = i + forecasting_horizon - 1
+        if target_idx >= len(y):
+            continue
+        # Check if all indices in the window are within training indices
+        if is_valid_sequence(start, end, train_indices):
+            x_window = x[start : start + lookback_window]  # shape: (lookback_window,)
+            y_value  = y[target_idx]                       # scalar
+            x_processed_train.append(x_window)
+            y_processed_train.append(y_value)
+
+    # Convert to numpy arrays
+    X_train = np.array(x_processed_train)  # shape: (num_train_samples, lookback_window)
+    y_train = np.array(y_processed_train)  # shape: (num_train_samples,)
 
     # If classification, bin the labels
     if not MSE:
-        bin_edges = np.linspace(np.min(y), np.max(y), num_bins - 1)
+        bin_edges = np.linspace(np.min(y_train), np.max(y_train), num_bins - 1)
         y_train = np.digitize(y_train, bin_edges)
-        y_test  = np.digitize(y_test, bin_edges)
 
+    # Create training data list with proper reshaping
     train_data = []
-    for i in range(offset, len(X_train)):
-        x_squeezed = np.squeeze(X_train[i], axis=-1) if X_train[i].ndim > 2 else X_train[i]
-        train_data.append((x_squeezed, y_train[i]))
+    for i in range(len(X_train)):
+        x_squeezed = torch.tensor(X_train[i], dtype=torch.float32).unsqueeze(-1)  # shape: (lookback_window, 1)
+        y_val = torch.tensor(y_train[i], dtype=torch.float32)                     # scalar
+        train_data.append((x_squeezed, y_val))
+
+    # Repeat the process for testing data
+    for i in test_indices:
+        start = i - lookback_window - forecasting_horizon + 1
+        end = i
+        if start < 0:
+            continue
+        target_idx = i + forecasting_horizon - 1
+        if target_idx >= len(y):
+            continue
+        if is_valid_sequence(start, end, test_indices):
+            x_window = x[start : start + lookback_window]  # shape: (lookback_window,)
+            y_value = y[target_idx]                       # scalar
+            x_processed_test.append(x_window)
+            y_processed_test.append(y_value)
+
+    X_test = np.array(x_processed_test)  # shape: (num_test_samples, lookback_window)
+    y_test = np.array(y_processed_test)  # shape: (num_test_samples,)
+
+    if not MSE:
+        bin_edges = np.linspace(np.min(y_test), np.max(y_test), num_bins - 1)
+        y_test = np.digitize(y_test, bin_edges)
 
     test_data = []
-    for i in range(offset, len(X_test)):
-        x_squeezed = np.squeeze(X_test[i], axis=-1) if X_test[i].ndim > 2 else X_test[i]
-        test_data.append((x_squeezed, y_test[i]))
+    for i in range(len(X_test)):
+        x_squeezed = torch.tensor(X_test[i], dtype=torch.float32).unsqueeze(-1)  # shape: (lookback_window, 1)
+        y_val = torch.tensor(y_test[i], dtype=torch.float32)                     # scalar
+        test_data.append((x_squeezed, y_val))
 
-    train_loader = DataLoader(train_data, batch_size=1, shuffle=False)
-    test_loader  = DataLoader(test_data, batch_size=1, shuffle=False)
+    # Create DataLoaders
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+    test_loader  = DataLoader(test_data, batch_size=32, shuffle=False)
 
     return train_loader, test_loader
 
-
 ###############################################
-# 3) Define a Simple RNN Model for Regression
+# 3) Define a 3-Layer RNN Model for Regression
 ###############################################
-class SimpleRNN(nn.Module):
+class RNN(nn.Module):
     """
-    A simple RNN with one RNN layer + linear output for time-series forecasting.
+    An RNN with three RNN layers and a linear output for time-series forecasting.
     """
-    def __init__(self, input_size=1, hidden_size=16, output_size=1, num_layers=1):
-        super(SimpleRNN, self).__init__()
+    def __init__(self, input_size=1, hidden_size=32, output_size=1, num_layers=3):
+        super(RNN, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True, nonlinearity='tanh')
         self.fc  = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
-        out, _ = self.rnn(x, h0)
-        out = out[:, -1, :]  # take the last timestep
-        out = self.fc(out)
+        # Initialize hidden state with zeros
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)  # (num_layers, batch, hidden_size)
+
+        # Forward propagate RNN
+        out, _ = self.rnn(x, h0)  # out: (batch, seq_length, hidden_size)
+
+        # Decode the last time step
+        out = out[:, -1, :]        # (batch, hidden_size)
+        out = self.fc(out)         # (batch, output_size)
         return out
 
-
 ###########################################
-# 4) Training, Evaluation, and Forecasting
+# 4) Training and Evaluation Functions
 ###########################################
-def train_rnn(model, train_loader, num_epochs=50, lr=1e-3):
+def train_rnn(model, train_loader, num_epochs=50, lr=1e-3, device='cpu'):
     """
-    Train the RNN model for more epochs (default 50).
+    Train the RNN model.
+
+    Parameters:
+    - model: The RNN model to train.
+    - train_loader: DataLoader for training data.
+    - num_epochs: Number of epochs to train.
+    - lr: Learning rate.
+    - device: Device to train on ('cpu' or 'cuda').
     """
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    model.to(device)
     model.train()
 
     for epoch in range(num_epochs):
         total_loss = 0.0
         for x_batch, y_batch in train_loader:
-            x_batch = x_batch.float()
-            y_batch = y_batch.float()
+            x_batch = x_batch.float().to(device)  # (batch_size, lookback_window, 1)
+            y_batch = y_batch.float().to(device).unsqueeze(1)  # (batch_size, 1)
 
             optimizer.zero_grad()
-            outputs = model(x_batch)  # shape: (batch_size, 1)
+            outputs = model(x_batch)              # (batch_size, 1)
             loss = criterion(outputs, y_batch)
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item()
+            total_loss += loss.item() * x_batch.size(0)
 
-        avg_loss = total_loss / len(train_loader)
-        if (epoch+1) % 5 == 0:
-            print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.6f}")
+        avg_loss = total_loss / len(train_loader.dataset)
 
+        if (epoch+1) % 5 == 0 or epoch == 0:
+            print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_loss:.6f}")
 
-def evaluate_rnn(model, test_loader):
+def evaluate_rnn(model, test_loader, device='cpu', verbose=True):
+    """
+    Evaluate the RNN model.
+
+    Parameters:
+    - model: The trained RNN model.
+    - test_loader: DataLoader for testing data.
+    - device: Device to evaluate on ('cpu' or 'cuda').
+    - verbose: If True, print the MSE loss.
+
+    Returns:
+    - avg_loss: Average MSE loss on the test set.
+    """
     model.eval()
     criterion = nn.MSELoss()
     total_loss = 0.0
-    preds = []
-    targets = []
 
     with torch.no_grad():
         for x_batch, y_batch in test_loader:
-            x_batch = x_batch.float()
-            y_batch = y_batch.float()
+            x_batch = x_batch.float().to(device)
+            y_batch = y_batch.float().to(device).unsqueeze(1)
 
-            output = model(x_batch)
-            loss = criterion(output, y_batch)
-            total_loss += loss.item()
+            outputs = model(x_batch)
+            loss = criterion(outputs, y_batch)
+            total_loss += loss.item() * x_batch.size(0)
 
-            preds.append(output.numpy().flatten())
-            targets.append(y_batch.numpy().flatten())
+    avg_loss = total_loss / len(test_loader.dataset)
+    if verbose:
+        print(f"Test MSE Loss: {avg_loss:.6f}")
+    return avg_loss
 
-    avg_loss = total_loss / len(test_loader)
-    print(f"Test MSE Loss: {avg_loss:.6f}")
-
-    preds   = np.concatenate(preds, axis=0)
-    targets = np.concatenate(targets, axis=0)
-    return preds, targets, avg_loss
-
-
-def forecast(model, init_sequence, steps=5):
+def forecast(model, init_sequence, steps=5, device='cpu'):
     """
-    Forecast `steps` future values given an initial sequence (lookback_window x 1).
+    Forecast steps future values given an initial sequence (lookback_window x 1).
+
+    Parameters:
+    - model: The trained RNN model.
+    - init_sequence: Tensor containing the initial sequence.
+    - steps: Number of future steps to forecast.
+    - device: Device to perform forecasting on ('cpu' or 'cuda').
+
+    Returns:
+    - forecasts: List of forecasted values.
     """
     model.eval()
     forecasts = []
 
-    current_seq = init_sequence.clone().float().unsqueeze(0)  # shape: (1, lookback_window, 1)
+    current_seq = init_sequence.clone().float().to(device).unsqueeze(0)  # shape: (1, lookback_window, 1)
     with torch.no_grad():
         for _ in range(steps):
             out = model(current_seq)           # shape: (1,1)
             next_val = out[:, 0].item()        # scalar
             forecasts.append(next_val)
 
-            # shift left by 1 and append the prediction
-            new_seq = torch.cat([current_seq[:, 1:, :], out.unsqueeze(2)], dim=1)
-            current_seq = new_seq
+            # Prepare the next input sequence
+            next_input = torch.tensor([[next_val]], dtype=torch.float32).to(device)
+            current_seq = torch.cat([current_seq[:, 1:, :], next_input.unsqueeze(0)], dim=1)
 
     return forecasts
 
+#####################################
+# 5) Experimentation and Plotting
+#####################################
+def run_experiments():
+    # Configuration
+    tau = 17
+    constant_past = 1.2
+    splits = (1000., 200.)  # 1000 train, 200 test
+    seed_id = 42
 
-#####################################################
-# 5) Example usage
-#####################################################
-if __name__ == "__main__":
-    # A) Instantiate Mackey-Glass for a small time range
+    lookback_windows = [3, 5, 7]
+    forecasting_horizons = list(range(1, 26))  # 1 to 25
+    num_bins = 5
+    num_epochs = 100
+    lr = 1e-3
+    hidden_size = 64
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    # Instantiate Mackey-Glass dataset with updated splits
     dataset = MackeyGlass(
-        tau=17,
-        constant_past=1.2,
-        splits=(30., 10.),  # 30 steps train, 10 steps test
-        seed_id=42
+        tau=tau,
+        constant_past=constant_past,
+        splits=splits,
+        seed_id=seed_id
     )
 
-    print("\n--- Mackey-Glass Full Time Series (first 10 points) ---")
-    print(dataset.mackeyglass_soln[:10])
-
-    # B) Convert to list of (sample, target) pairs
+    # Convert to list of (sample, target) pairs (as scalars)
     data_list = []
     for i in range(len(dataset)):
         sample, target = dataset[i]
-        sample_np = sample.numpy()  # shape = (1,1)
-        target_np = target.numpy()  # shape = (1,)
-        data_list.append((sample_np, target_np))
+        sample_val = sample.numpy()[0, 0]  # Extract scalar value
+        target_val = target.numpy()[0]     # Extract scalar value
+        data_list.append((sample_val, target_val))
 
-    # C) Create DataLoaders with lookback=3, horizon=1
-    lookback_window    = 3
-    forecasting_horizon= 1
-    num_bins           = 5
-    test_size          = 0.2
+    # Initialize a dictionary to store MSE losses
+    mse_results = {lb: [] for lb in lookback_windows}
 
-    train_loader, test_loader = create_time_series_dataset(
-        data_list,
-        lookback_window,
-        forecasting_horizon,
-        num_bins,
-        test_size,
-        offset=0,
-        MSE=True
-    )
+    # Iterate over each lookback window
+    for lb in lookback_windows:
+        print(f"\n=== Lookback Window: {lb} ===")
+        mse_horizon = []
 
-    # D) Print out a few batches from the train_loader
-    print("\n--- A few batches from the train_loader (first 10) ---")
-    for idx, (x_batch, y_batch) in enumerate(train_loader):
-        print(f"Batch {idx}:")
-        print(f"  X_batch shape: {x_batch.shape}, X_batch =\n{x_batch}")
-        print(f"  Y_batch shape: {y_batch.shape}, Y_batch =\n{y_batch}")
-        if idx >= 9:
-            break
+        # Iterate over each forecasting horizon
+        for fh in forecasting_horizons:
+            print(f"  Forecasting Horizon: {fh}", end='\r')
 
-    # E) Print out a few batches from the test_loader
-    print("\n--- A few batches from the test_loader (first 5) ---")
-    for idx, (x_batch, y_batch) in enumerate(test_loader):
-        print(f"Test Batch {idx}:")
-        print(f"  X_batch shape: {x_batch.shape}, X_batch =\n{x_batch}")
-        print(f"  Y_batch shape: {y_batch.shape}, Y_batch =\n{y_batch}")
-        if idx >= 4:
-            break
+            # Create DataLoaders using predefined train and test indices
+            train_loader, test_loader = create_time_series_dataset(
+                data_list,
+                train_indices=dataset.ind_train,
+                test_indices=dataset.ind_test,
+                lookback_window=lb,
+                forecasting_horizon=fh,
+                num_bins=num_bins,
+                MSE=True
+            )
 
-    # F) Define RNN model, train for more epochs (e.g. 50), and evaluate
-    model = SimpleRNN(input_size=1, hidden_size=16, output_size=1, num_layers=1)
-    train_rnn(model, train_loader, num_epochs=50, lr=1e-3)
-    preds, targets, test_loss = evaluate_rnn(model, test_loader)
+            # Initialize the model
+            model = RNN(input_size=1, hidden_size=hidden_size, output_size=1, num_layers=3)
+            model.to(device)
 
-    print("\nSample Predictions vs Targets (Test Set)")
-    for i in range(min(5, len(preds))):
-        print(f"Pred: {preds[i]:.4f}, Target: {targets[i]:.4f}")
+            # Train the model
+            train_rnn(model, train_loader, num_epochs=num_epochs, lr=lr, device=device)
 
-    # G) Forecast 5 steps ahead from the last training batch
-    last_train_batch = list(train_loader)[-1]    # (x_batch, y_batch)
-    init_seq = last_train_batch[0].squeeze(0)    # shape: (lookback_window, 1)
+            # Evaluate the model on the test set
+            test_loss = evaluate_rnn(model, test_loader, device=device, verbose=False)
+            mse_horizon.append(test_loss)
 
-    future_steps = 5
-    future_preds = forecast(model, init_seq, steps=future_steps)
+        mse_results[lb] = mse_horizon
 
-    print(f"\nForecasting {future_steps} steps ahead from the last train window:")
-    print(future_preds)
+        # Plotting for the current lookback window
+        plt.figure(figsize=(10, 6))
+        plt.plot(forecasting_horizons, mse_results[lb], marker='o', label=f"Lookback={lb}")
+        plt.title(f"MSE vs Forecasting Horizon (Lookback={lb})")
+        plt.xlabel("Forecasting Horizon")
+        plt.ylabel("MSE Loss")
+        plt.xticks(forecasting_horizons)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    # Optional: Print a summary table of results
+    print("\n=== Summary of MSE Losses ===")
+    for lb in lookback_windows:
+        print(f"\nLookback Window: {lb}")
+        for fh, mse in zip(forecasting_horizons, mse_results[lb]):
+            if not np.isnan(mse):
+                print(f"  Forecasting Horizon {fh}: MSE Loss = {mse:.6f}")
+            else:
+                print(f"  Forecasting Horizon {fh}: Skipped due to insufficient test samples.")
+
+if __name__ == "__main__":
+    run_experiments()
