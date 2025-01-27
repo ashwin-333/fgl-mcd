@@ -237,7 +237,7 @@ def train_rnn(model, train_loader, num_epochs=50, lr=1e-3, device='cpu'):
     - lr: Learning rate.
     - device: Device to train on ('cpu' or 'cuda').
     """
-    criterion = nn.MSELoss()
+    criterion = torch.nn.GaussianNLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
     model.to(device)
     model.train()
@@ -249,8 +249,10 @@ def train_rnn(model, train_loader, num_epochs=50, lr=1e-3, device='cpu'):
             y_batch = y_batch.float().to(device).unsqueeze(1)  # (batch_size, 1)
 
             optimizer.zero_grad()
-            outputs = model(x_batch)              # (batch_size, 1)
-            loss = criterion(outputs, y_batch)
+            mean = model(x_batch)
+            # Fixed variance (tensor of ones)
+            variance = torch.ones_like(mean).to(device)
+            loss = criterion(mean, y_batch, variance)
             loss.backward()
             optimizer.step()
 
@@ -272,10 +274,10 @@ def evaluate_rnn(model, test_loader, device='cpu', verbose=True):
     - verbose: If True, print the MSE loss.
 
     Returns:
-    - avg_loss: Average MSE loss on the test set.
+    - avg_loss: Average Gaussian NLLL loss on the test set.
     """
     model.eval()
-    criterion = nn.MSELoss()
+    criterion = torch.nn.GaussianNLLLoss()
     total_loss = 0.0
 
     with torch.no_grad():
@@ -283,13 +285,15 @@ def evaluate_rnn(model, test_loader, device='cpu', verbose=True):
             x_batch = x_batch.float().to(device)
             y_batch = y_batch.float().to(device).unsqueeze(1)
 
-            outputs = model(x_batch)
-            loss = criterion(outputs, y_batch)
+            mean = model(x_batch)
+            # Fixed variance (tensor of ones)
+            variance = torch.ones_like(mean).to(device)
+            loss = criterion(mean, y_batch, variance)
             total_loss += loss.item() * x_batch.size(0)
 
     avg_loss = total_loss / len(test_loader.dataset)
     if verbose:
-        print(f"Test MSE Loss: {avg_loss:.6f}")
+        print(f"Test Gaussian NLL Loss: {avg_loss:.6f}")
     return avg_loss
 
 def forecast(model, init_sequence, steps=5, device='cpu'):
@@ -395,9 +399,9 @@ def run_experiments():
         # Plotting for the current lookback window
         plt.figure(figsize=(10, 6))
         plt.plot(forecasting_horizons, mse_results[lb], marker='o', label=f"Lookback={lb}")
-        plt.title(f"MSE vs Forecasting Horizon (Lookback={lb})")
+        plt.title(f"Gaussian NLLL vs Forecasting Horizon (Lookback={lb})")
         plt.xlabel("Forecasting Horizon")
-        plt.ylabel("MSE Loss")
+        plt.ylabel("Gaussian NLLL Loss")
         plt.xticks(forecasting_horizons)
         plt.grid(True)
         plt.legend()
@@ -405,12 +409,12 @@ def run_experiments():
         plt.show()
 
     # Optional: Print a summary table of results
-    print("\n=== Summary of MSE Losses ===")
+    print("\n=== Summary of Gaussian NLLL Losses ===")
     for lb in lookback_windows:
         print(f"\nLookback Window: {lb}")
         for fh, mse in zip(forecasting_horizons, mse_results[lb]):
             if not np.isnan(mse):
-                print(f"  Forecasting Horizon {fh}: MSE Loss = {mse:.6f}")
+                print(f"  Forecasting Horizon {fh}: Gaussian NLLL Loss = {mse:.6f}")
             else:
                 print(f"  Forecasting Horizon {fh}: Skipped due to insufficient test samples.")
 
