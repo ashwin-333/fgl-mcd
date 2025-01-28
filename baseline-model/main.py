@@ -10,7 +10,7 @@ def run_experiments():
     # Configuration
     tau = 17
     constant_past = 1.2
-    splits = (1000., 200.)  # 1000 train, 200 test
+    splits = (800., 200.)  # 1000 train, 200 test
     seed_id = 42
 
     lookback_windows = [3, 5, 7]
@@ -72,7 +72,7 @@ def run_experiments():
 
             #Calibrate and plot uncertainty
             calibrated_preds = calibrate_uncertainty(preds, true_values)
-            plot_uncertainty(preds, calibrated_preds, true_values)
+            plot_uncertainty(preds, calibrated_preds, true_values, fh, lb)
 
             horizon_losses.append(test_loss)
 

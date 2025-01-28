@@ -18,7 +18,7 @@ def plot_results(results, lookback_windows, forecasting_horizons):
         plt.tight_layout()
         plt.show()
 
-def plot_uncertainty(preds, calibrated_preds, true_values):
+def plot_uncertainty(preds, calibrated_preds, true_values, forecasting_horizon, lookback_window):
 
     plt.figure(figsize=(12, 6))
     plt.plot(true_values, label="True Values", color="blue", )
@@ -32,6 +32,6 @@ def plot_uncertainty(preds, calibrated_preds, true_values):
     plt.legend()
     plt.xlabel("Time Step")
     plt.ylabel("Value")
-    plt.title("Calibrated Predictions with Uncertainty Visualization")
+    plt.title(f"Calibrated Predictions with Uncertainty Visualization (FH: {forecasting_horizon} LB: {lookback_window})")
     plt.legend()
     plt.show()
