@@ -6,6 +6,9 @@ import torch.nn as nn
 import torch.optim as optim
 import warnings
 
+from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import mean_squared_error
+
 # Suppress potential warnings for cleaner output
 warnings.filterwarnings("ignore")
 
@@ -196,6 +199,8 @@ def evaluate_rnn(model, test_loader, device='cpu', verbose=True):
     model.eval()
     criterion = torch.nn.GaussianNLLLoss()
     total_loss = 0.0
+    predictions = []
+    true_values = []
 
     with torch.no_grad():
         for x_batch, y_batch in test_loader:
@@ -207,11 +212,21 @@ def evaluate_rnn(model, test_loader, device='cpu', verbose=True):
             loss = criterion(mean, y_batch, variance)
             total_loss += loss.item() * x_batch.size(0)
 
+            predictions.extend(mean.cpu().detach().numpy())
+            true_values.extend(y_batch.cpu().detach().numpy())
+
     avg_loss = total_loss / len(test_loader.dataset)
+    
+    predictions = np.array(predictions).flatten()
+    true_values = np.array(true_values).flatten()
+
     if verbose:
         print(f"Test Gaussian NLL Loss: {avg_loss:.6f}")
-    return avg_loss
+    return avg_loss, predictions, true_values
 
+###########################
+# 5) Forecasting Function
+###########################
 
 def forecast(model, init_sequence, steps=5, device='cpu'):
     """
@@ -230,3 +245,13 @@ def forecast(model, init_sequence, steps=5, device='cpu'):
             current_seq = torch.cat([current_seq[:, 1:, :], next_input.unsqueeze(0)], dim=1)
 
     return forecasts
+
+##############################
+# 6) Calculating uncertainty
+##############################
+
+def calibrate_uncertainty(preds, true_values):
+    ir = IsotonicRegression(out_of_bounds="clip")
+    calibrated_preds = ir.fit_transform(preds, true_values)
+
+    return calibrated_preds

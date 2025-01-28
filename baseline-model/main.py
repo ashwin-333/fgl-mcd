@@ -1,6 +1,6 @@
 import torch
-from utils import MackeyGlass, create_time_series_dataset, RNN, train_rnn, evaluate_rnn
-from visualize import plot_results
+from utils import MackeyGlass, create_time_series_dataset, RNN, train_rnn, evaluate_rnn, calibrate_uncertainty
+from visualize import plot_results, plot_uncertainty
 
 
 def run_experiments():
@@ -68,7 +68,12 @@ def run_experiments():
             train_rnn(model, train_loader, num_epochs=num_epochs, lr=lr, device=device)
 
             # Evaluate the model on the test set
-            test_loss = evaluate_rnn(model, test_loader, device=device, verbose=False)
+            test_loss, preds, true_values = evaluate_rnn(model, test_loader, device=device, verbose=False)
+
+            #Calibrate and plot uncertainty
+            calibrated_preds = calibrate_uncertainty(preds, true_values)
+            plot_uncertainty(preds, calibrated_preds, true_values)
+
             horizon_losses.append(test_loss)
 
         results[lb] = horizon_losses
@@ -85,7 +90,6 @@ def run_experiments():
                 print(f"  Forecasting Horizon {fh}: Gaussian NLLL Loss = {loss:.6f}")
             else:
                 print(f"  Forecasting Horizon {fh}: Skipped due to insufficient test samples.")
-
 
 if __name__ == "__main__":
     run_experiments()
