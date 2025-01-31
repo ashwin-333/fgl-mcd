@@ -251,7 +251,20 @@ def forecast(model, init_sequence, steps=5, device='cpu'):
 ##############################
 
 def calibrate_uncertainty(preds, true_values):
+    alpha = 2
+    
     ir = IsotonicRegression(out_of_bounds="clip")
     calibrated_preds = ir.fit_transform(preds, true_values)
 
-    return calibrated_preds
+
+    residuals = true_values - calibrated_preds
+
+    positive_residuals = np.maximum(residuals, 0)
+    negative_residuals = np.minimum(residuals, 0)
+
+    ir_upper = calibrated_preds + alpha * positive_residuals  
+    ir_lower = calibrated_preds + alpha * negative_residuals
+    
+
+    return calibrated_preds, ir_lower,  ir_upper
+

@@ -18,7 +18,7 @@ def plot_results(results, lookback_windows, forecasting_horizons):
         plt.tight_layout()
         plt.show()
 
-def plot_uncertainty(preds, calibrated_preds, true_values, forecasting_horizon, lookback_window):
+def plot_uncertainty(preds, calibrated_preds, true_values, lower_bound, upper_bound, forecasting_horizon, lookback_window):
 
     plt.figure(figsize=(12, 6))
     plt.plot(true_values, label="True Values", color="blue", )
@@ -26,8 +26,8 @@ def plot_uncertainty(preds, calibrated_preds, true_values, forecasting_horizon, 
     #plt.plot(calibrated_preds, label="Calibrated Predictions", color="orange")
 
     plt.fill_between(range(len(preds)), 
-                calibrated_preds - np.abs(calibrated_preds - true_values),
-                calibrated_preds + np.abs(calibrated_preds - true_values),
+                lower_bound,
+                upper_bound,
                 color='orange', alpha=0.2, label='Uncertainty Band')
     plt.legend()
     plt.xlabel("Time Step")
