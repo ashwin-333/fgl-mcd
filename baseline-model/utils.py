@@ -256,14 +256,17 @@ def calibrate_uncertainty(preds, true_values):
     ir = IsotonicRegression(out_of_bounds="clip")
     calibrated_preds = ir.fit_transform(preds, true_values)
 
-
     residuals = true_values - calibrated_preds
+
 
     positive_residuals = np.maximum(residuals, 0)
     negative_residuals = np.minimum(residuals, 0)
 
-    ir_upper = calibrated_preds + alpha * positive_residuals  
-    ir_lower = calibrated_preds + alpha * negative_residuals
+    upper_residual = np.percentile(positive_residuals, 95)  # 95th percentile
+    lower_residual = np.percentile(negative_residuals, 5)   # 5th percentile
+
+    ir_upper = calibrated_preds + alpha * upper_residual  # Upper bound
+    ir_lower = calibrated_preds + alpha * lower_residual  # Lower bound
     
 
     return calibrated_preds, ir_lower,  ir_upper

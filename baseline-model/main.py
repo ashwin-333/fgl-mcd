@@ -83,8 +83,8 @@ def run_experiments():
             print(f"\n=== Teacher Model Test Loss (LB={lb}, FH={fh}): {test_loss:.6f} ===")
 
             # Calibrate and plot uncertainty
-            calibrated_preds = calibrate_uncertainty(preds, true_values)
-            plot_uncertainty(preds, calibrated_preds, true_values, fh, lb)
+            calibrated_preds, ir_lower, ir_upper= calibrate_uncertainty(preds, true_values)
+            plot_uncertainty(preds, calibrated_preds, true_values, ir_lower, ir_upper, fh, lb)
 
             # Store the test loss for the current FH
             results[lb].append(test_loss)
