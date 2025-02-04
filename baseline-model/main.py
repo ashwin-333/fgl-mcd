@@ -4,8 +4,8 @@ import torch
 from utils import MackeyGlass, create_time_series_dataset, RNN, train_rnn, evaluate_rnn, calibrate_uncertainty
 from visualize import plot_results, plot_uncertainty
 
-MODEL_PATH_TEMPLATE = "baseline-model/teacher_model_lb{lb}.pth"
-DATA_PATH = "baseline-model/mackey_glass_data.pkl"
+MODEL_PATH_TEMPLATE = "teacher_model_lb{lb}.pth"
+DATA_PATH = "mackey_glass_data.pkl"
 
 def save_mackey_glass_data(tau, constant_past, splits, seed_id, filepath):
     """
@@ -51,9 +51,6 @@ def run_experiments():
     hidden_size = 64
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
-    # Ensure the folder exists before saving models
-    os.makedirs("baseline-model", exist_ok=True)
 
     # Check if Mackey-Glass data exists, otherwise generate and save it
     if not os.path.exists(DATA_PATH):
