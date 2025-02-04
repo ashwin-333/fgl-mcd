@@ -1,9 +1,38 @@
 import os
+import pickle
 import torch
 from utils import MackeyGlass, create_time_series_dataset, RNN, train_rnn, evaluate_rnn, calibrate_uncertainty
 from visualize import plot_results, plot_uncertainty
 
 MODEL_PATH_TEMPLATE = "baseline-model/teacher_model_lb{lb}.pth"
+DATA_PATH = "baseline-model/mackey_glass_data.pkl"
+
+def save_mackey_glass_data(tau, constant_past, splits, seed_id, filepath):
+    """
+    Generates Mackey-Glass data and saves it to a .pkl file.
+    """
+    print(f"Generating Mackey-Glass data...")
+    dataset = MackeyGlass(
+        tau=tau,
+        constant_past=constant_past,
+        splits=splits,
+        seed_id=seed_id
+    )
+    data_list = [(sample.numpy()[0, 0], target.numpy()[0]) for sample, target in dataset]
+
+    with open(filepath, 'wb') as f:
+        pickle.dump(data_list, f)
+    print(f"Saved Mackey-Glass data to {filepath}")
+    return data_list
+
+def load_mackey_glass_data(filepath):
+    """
+    Loads Mackey-Glass data from a .pkl file.
+    """
+    print(f"Loading Mackey-Glass data from {filepath}...")
+    with open(filepath, 'rb') as f:
+        data_list = pickle.load(f)
+    return data_list
 
 def run_experiments():
     """
@@ -23,15 +52,14 @@ def run_experiments():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Instantiate Mackey-Glass dataset
-    dataset = MackeyGlass(
-        tau=tau,
-        constant_past=constant_past,
-        splits=splits,
-        seed_id=seed_id
-    )
+    # Ensure the folder exists before saving models
+    os.makedirs("baseline-model", exist_ok=True)
 
-    data_list = [(sample.numpy()[0, 0], target.numpy()[0]) for sample, target in dataset]
+    # Check if Mackey-Glass data exists, otherwise generate and save it
+    if not os.path.exists(DATA_PATH):
+        data_list = save_mackey_glass_data(tau, constant_past, splits, seed_id, DATA_PATH)
+    else:
+        data_list = load_mackey_glass_data(DATA_PATH)
 
     results = {}
 
@@ -50,8 +78,8 @@ def run_experiments():
             # Create DataLoaders for the current LB and FH
             train_loader, test_loader = create_time_series_dataset(
                 data_list,
-                dataset.ind_train,
-                dataset.ind_test,
+                range(800),  # Using predefined splits
+                range(800, 1000),
                 lookback_window=lb,
                 forecasting_horizon=fh,
                 num_bins=5,
@@ -83,7 +111,7 @@ def run_experiments():
             print(f"\n=== Teacher Model Test Loss (LB={lb}, FH={fh}): {test_loss:.6f} ===")
 
             # Calibrate and plot uncertainty
-            calibrated_preds, ir_lower, ir_upper= calibrate_uncertainty(preds, true_values)
+            calibrated_preds, ir_lower, ir_upper = calibrate_uncertainty(preds, true_values)
             plot_uncertainty(preds, calibrated_preds, true_values, ir_lower, ir_upper, fh, lb)
 
             # Store the test loss for the current FH
@@ -103,6 +131,4 @@ def run_experiments():
                 print(f"  Forecasting Horizon {fh}: Skipped due to insufficient test samples.")
 
 if __name__ == "__main__":
-    # Ensure the folder exists before saving models
-    os.makedirs("baseline-model", exist_ok=True)
     run_experiments()
