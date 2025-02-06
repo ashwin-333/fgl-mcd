@@ -169,7 +169,7 @@ def train_rnn(model, train_loader, num_epochs=50, lr=1e-3, device='cpu'):
     """
     Train the RNN model.
     """
-    criterion = torch.nn.GaussianNLLLoss()
+    criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
     model.to(device)
     model.train()
@@ -180,9 +180,8 @@ def train_rnn(model, train_loader, num_epochs=50, lr=1e-3, device='cpu'):
             x_batch = x_batch.float().to(device)
             y_batch = y_batch.float().to(device).unsqueeze(1)
             optimizer.zero_grad()
-            mean = model(x_batch)
-            variance = torch.ones_like(mean).to(device)
-            loss = criterion(mean, y_batch, variance)
+            outputs = model(x_batch)
+            loss = criterion(outputs, y_batch)
             loss.backward()
             optimizer.step()
             total_loss += loss.item() * x_batch.size(0)
@@ -249,12 +248,21 @@ def forecast(model, init_sequence, steps=5, device='cpu'):
 ##############################
 # 6) Calculating uncertainty
 ##############################
-
 def calibrate_uncertainty(preds, true_values):
+    preds_np = preds.cpu().detach().numpy().flatten()
+    true_values_np = true_values.cpu().detach().numpy().flatten()
+    
+    ir = IsotonicRegression(out_of_bounds="clip")
+    calibrated_preds = ir.fit_transform(preds_np, true_values_np)
+
+    return torch.tensor(calibrated_preds, dtype=torch.float32, device=preds.device)
+
+"""def calibrate_uncertainty(preds, true_values):
     alpha = 2
     
     ir = IsotonicRegression(out_of_bounds="clip")
     calibrated_preds = ir.fit_transform(preds, true_values)
+    return calibrated_preds
 
     residuals = true_values - calibrated_preds
 
@@ -270,4 +278,4 @@ def calibrate_uncertainty(preds, true_values):
     
 
     return calibrated_preds, ir_lower,  ir_upper
-
+"""
