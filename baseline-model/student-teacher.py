@@ -59,7 +59,9 @@ def run_experiments():
         test_loss, preds, true_values = evaluate_rnn(teacher_model, teacher_test_loader, device=device, verbose=False)
 
         print(f"\n=== Teacher Model Test Loss ): {test_loss:.6f} ===")
-    
+
+    # call the mg function once and download it.
+    # within the create_time_Series_dataset, just give it the pkl data
     #train student
     student_horizons = 10 #put this in a loop later
     student_train_loader, student_test_loader = create_time_series_dataset(
