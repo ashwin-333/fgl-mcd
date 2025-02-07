@@ -79,6 +79,7 @@ def run_experiments():
         lookback_window=lb,
         forecasting_horizon=1, #constant 1
         num_bins=5,
+        # student horizon - 1
         MSE=True
     )
     total_preds = []
