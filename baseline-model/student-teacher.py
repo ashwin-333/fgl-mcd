@@ -1,7 +1,9 @@
 import os
 import torch
-from utils import MackeyGlass, create_time_series_dataset, RNN, train_rnn, evaluate_rnn, calibrate_uncertainty
+from utils import MackeyGlass, create_time_series_dataset, RNN, train_rnn, evaluate_rnn, calibrate_uncertainty, evaluate_helper
 from visualize import plot_results, plot_uncertainty
+import torch.optim as optim
+import numpy as np
 
 MODEL_PATH_TEMPLATE = "baseline-model/teacher_model_lb{lb}.pth"
 
@@ -13,7 +15,7 @@ def run_experiments():
 
     lookback_windows = [3, 5, 7]  # Three different configurations
     forecasting_horizons = [1]  # Next-step forecasting only
-    num_epochs = 100
+    num_epochs = 20
     lr = 1e-3
     hidden_size = 64
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,8 +68,8 @@ def run_experiments():
         data_list,
         dataset.ind_train,
         dataset.ind_test,
-        lookback_window=lb,
-        forecasting_horizon=1, #constant 1
+        lookback_window=3,
+        forecasting_horizon=student_horizons, #constant 1
         num_bins=5,
         MSE=True
     )
@@ -84,23 +86,43 @@ def run_experiments():
     total_preds = []
     teacher_model.eval()
 
+    
 
-    for inputs, targets in helper_train_loader:
-        inputs = inputs.float().to(device)
-        targets = targets.float().to(device).unsqueeze(1)
+    helper_preds, helper_true_vals = evaluate_helper(teacher_model, helper_train_loader, device=device, verbose=False)
+    vars = calibrate_uncertainty(helper_preds, helper_true_vals)
 
-        with torch.no_grad():
-            outputs = teacher_model(inputs)
-            preds.append(outputs)
-            true_vals.append(targets)
+    var_min = vars.min()
+    var_max = vars.max() 
 
-    preds = torch.cat(preds, dim=0)  # Convert list of tensors to a single tensor
-    true_vals = torch.cat(true_vals, dim=0)  # Ensure all targets are used
+    vars = 0.1 + (vars - var_min) / (var_max - var_min) * (1 - 0.1)
 
-    # Calibrate after collecting all predictions
-    calibrated_outputs = calibrate_uncertainty(preds, true_vals)
+    vars = vars[student_horizons-1:]
+    vars = vars.to(device)
 
-    total_preds.append(calibrated_outputs)
+    student_model = RNN(input_size=1, hidden_size=hidden_size, output_size=1, num_layers=3)
+    optimizer = optim.Adam(student_model.parameters(), lr=lr)
+    student_model.to(device)
+
+#train student
+    for epoch in range(num_epochs):
+        total_loss = 0
+        print(epoch)
+        for (inputs, targets), var in zip(student_train_loader, vars):
+            var = var.float().to(device)
+            var = var.unsqueeze(0).unsqueeze(0)
+            inputs = inputs.float().to(device)
+            targets = targets.float().to(device).unsqueeze(1)
+            outputs = student_model(inputs)
+            loss = torch.nn.GaussianNLLLoss()
+            output_loss = loss(outputs, targets, var)
+            optimizer.zero_grad()
+            output_loss.backward()  
+            optimizer.step()
+            total_loss += output_loss.item()
+            print(output_loss.item())
+    print(f"Loss Average: {total_loss/len(student_train_loader.dataset)}")
+
+
     
 
     

@@ -134,8 +134,8 @@ def create_time_series_dataset(data, train_indices, test_indices, lookback_windo
     test_data = [(torch.tensor(X_test[i], dtype=torch.float32).unsqueeze(-1), torch.tensor(y_test[i], dtype=torch.float32))
                  for i in range(len(X_test))]
 
-    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
-    test_loader  = DataLoader(test_data, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
+    test_loader  = DataLoader(test_data, batch_size=1, shuffle=False)
 
     return train_loader, test_loader
 
@@ -223,6 +223,32 @@ def evaluate_rnn(model, test_loader, device='cpu', verbose=True):
         print(f"Test Gaussian NLL Loss: {avg_loss:.6f}")
     return avg_loss, predictions, true_values
 
+def evaluate_helper(model, test_loader, device='cpu', verbose=True):
+    """
+    Evaluate the RNN model.
+    """
+    model.eval()
+    criterion = torch.nn.MSELoss()
+    total_loss = 0.0
+    predictions = []
+    true_values = []
+
+    with torch.no_grad():
+        for x_batch, y_batch in test_loader:
+            x_batch = x_batch.float().to(device)
+            y_batch = y_batch.float().to(device).unsqueeze(1)
+
+            mean = model(x_batch)
+            loss = criterion(mean, y_batch)
+
+            predictions.extend(mean.cpu().detach().numpy())
+            true_values.extend(y_batch.cpu().detach().numpy())
+    
+    predictions = np.array(predictions).flatten()
+    true_values = np.array(true_values).flatten()
+
+    return predictions, true_values
+
 ###########################
 # 5) Forecasting Function
 ###########################
@@ -249,11 +275,13 @@ def forecast(model, init_sequence, steps=5, device='cpu'):
 # 6) Calculating uncertainty
 ##############################
 def calibrate_uncertainty(preds, true_values):
-    preds_np = preds.cpu().detach().numpy().flatten()
-    true_values_np = true_values.cpu().detach().numpy().flatten()
+    preds_np = preds
+    true_values_np = true_values
     
     ir = IsotonicRegression(out_of_bounds="clip")
     calibrated_preds = ir.fit_transform(preds_np, true_values_np)
+    #calibrated_preds = np.abs(calibrated_preds - true_values) * 2
+
 
     return torch.tensor(calibrated_preds, dtype=torch.float32, device=preds.device)
 
