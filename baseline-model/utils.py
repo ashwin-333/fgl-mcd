@@ -135,15 +135,11 @@ def create_time_series_dataset(data, train_indices, test_indices, lookback_windo
                   for i in range(len(X_train))]
     test_data = [(torch.tensor(X_test[i], dtype=torch.float32).unsqueeze(-1), torch.tensor(y_test[i], dtype=torch.float32))
                  for i in range(len(X_test))]
-<<<<<<< HEAD
+
 
     train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
     test_loader  = DataLoader(test_data, batch_size=1, shuffle=False)
-=======
-    
-    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
-    test_loader  = DataLoader(test_data, batch_size=32, shuffle=False)
->>>>>>> 04b00bf643b77739e3acfb6caf5d2856da30d341
+
 
     return train_loader, test_loader
 
