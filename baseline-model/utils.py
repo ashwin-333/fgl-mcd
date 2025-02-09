@@ -80,13 +80,15 @@ class MackeyGlass(Dataset):
 #############################################
 # 2) Create Time Series Dataset
 #############################################
-def create_time_series_dataset(data, train_indices, test_indices, lookback_window, forecasting_horizon, num_bins, MSE=False):
+def create_time_series_dataset(data, train_indices, test_indices, lookback_window, forecasting_horizon, num_bins, offset, MSE=False):
     """
     Create training and testing datasets based on predefined indices.
     """
     x = np.array([point[0] for point in data])  # shape: (N,)
     y = np.array([point[1] for point in data])  # shape: (N,)
-
+    x = x[offset:]
+    y = y[offset:]
+    
     x_processed_train = []
     y_processed_train = []
 
@@ -133,9 +135,15 @@ def create_time_series_dataset(data, train_indices, test_indices, lookback_windo
                   for i in range(len(X_train))]
     test_data = [(torch.tensor(X_test[i], dtype=torch.float32).unsqueeze(-1), torch.tensor(y_test[i], dtype=torch.float32))
                  for i in range(len(X_test))]
+<<<<<<< HEAD
 
     train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
     test_loader  = DataLoader(test_data, batch_size=1, shuffle=False)
+=======
+    
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+    test_loader  = DataLoader(test_data, batch_size=32, shuffle=False)
+>>>>>>> 04b00bf643b77739e3acfb6caf5d2856da30d341
 
     return train_loader, test_loader
 
