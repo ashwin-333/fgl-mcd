@@ -3,10 +3,21 @@ import math
 import numpy as np
 import datetime as dt
 from numpy import newaxis
-from core.utils import Timer
 from keras.layers import Dense, Activation, Dropout, LSTM
 from keras.models import Sequential, load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint
+
+class Timer():
+
+	def __init__(self):
+		self.start_dt = None
+
+	def start(self):
+		self.start_dt = dt.datetime.now()
+
+	def stop(self):
+		end_dt = dt.datetime.now()
+		print('Time taken: %s' % (end_dt - self.start_dt))
 
 class Model():
 	"""A class for an building and inferencing an lstm model"""
