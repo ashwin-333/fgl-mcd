@@ -9,7 +9,7 @@ import itertools
 from multiprocessing import Pool
 
 def create_data():
-    data_path = "data.pkl"
+    data_path = "mg_data.pkl"
     data_list = None
 
     if not os.path.exists(data_path):
@@ -53,7 +53,7 @@ def run_single_experiment(args):
     mcd_data_dict = {str(h): forecast_mcd(lookback_window, teacher_horizon, h, hs, lr, num_epochs, optimizer) for h in horizons}
     return config, mcd_data_dict
 
-def hyperparameter_sweep(horizons, teacher_horizon, hs_values, lr_values, num_epochs_values, optimizer_values, lookback_windows, baseline_data_dict):
+def hyperparameter_sweep(horizons, teacher_horizon, hs_values, lr_values, num_epochs_values, optimizer_values, lookback_windows):
     all_results = {}
     param_combinations = list(itertools.product(hs_values, lr_values, num_epochs_values, optimizer_values, lookback_windows))
     
@@ -73,7 +73,7 @@ def hyperparameter_sweep(horizons, teacher_horizon, hs_values, lr_values, num_ep
 
 if __name__ == "__main__":
 
-    #create_data()
+    create_data()
     #test_data()
     horizons = [i for i in range(2, 26)]
     lookback_window = 10
@@ -84,13 +84,14 @@ if __name__ == "__main__":
     baseline_path = "baseline_loss.pth"
     all_results_path = "all_results4.pth"
 
+    """
     baseline_data_dict = load_baseline_data(baseline_path)
     if baseline_data_dict is None:
         baseline_data_dict = dict()
         for student_horizon in horizons:
             baseline_data_dict[str(student_horizon)] = forecast_baseline(lookback_window, student_horizon)
         save_baseline_data(baseline_path, baseline_data_dict)
-    
+    """
     """
     all_results = None
     with open(all_results_path, "rb") as f:
@@ -104,8 +105,13 @@ if __name__ == "__main__":
     lr = [0.01]
     num_epochs = [20]
     optimizer = [torch.optim.SGD]
+    mcd_lookback_window = [10,20,30]
 
-    hyperparameter_sweep(horizons, lookback_window, teacher_horizon, hs, lr, num_epochs, optimizer, all_results_path)
+    baseline_data_dict = dict()
+    for horizon in horizons:
+        baseline_data_dict[str(horizon)] = forecast_baseline(lookback_window, horizon)
+
+    hyperparameter_sweep(horizons, teacher_horizon, hs, lr, num_epochs, optimizer, mcd_lookback_window)
 
     all_results = None
     with open(all_results_path, "rb") as f:
