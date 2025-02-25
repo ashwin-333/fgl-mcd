@@ -3,7 +3,23 @@
 ## Project Structure
 
 ```plaintext
-├── baseline-model/       # Baseline FGL implementation
-│   ├── main.py           # Main script to run the baseline model
-│   ├── visualize.py      # Script containing visualization utilities
-│   ├── utils.py          # Dataset preparation, model definitions, and training/evaluation functions
+├── baseline-model/
+│   ├── main.py
+│   ├── visualize.py
+│   ├── utils.py
+├── rnn/
+│   ├── main.py
+│   ├── visualize.py
+│   ├── utils.py
+├── models/
+|   ├── layers/
+|   |   ├── AutoCorrelation.py
+|   |   ├── Autoformer_EncDec.py
+|   |   ├── Embed.py
+|   |   ├── PatchTST_backbone.py
+|   |   ├── PatchTST_layers.py
+|   |   ├── RevIN.py
+│   ├── Autoformer.py
+│   ├── LSTM.py
+│   ├── PatchTST.py
+│   ├── S-Mamba.py
