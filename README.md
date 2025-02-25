@@ -26,3 +26,5 @@
 ├── datasets/
 │   ├── traffic.zip
 │   ├── electricity.zip
+│   ├── exchange.zip
+│   ├── weather.zip
